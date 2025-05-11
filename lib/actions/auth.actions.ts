@@ -2,6 +2,7 @@
 
 import {db, auth} from "@/firebase/admin";
 import {cookies} from "next/headers";
+import { SuiteContext } from "node:test";
 
 const ONE_WEEK = 60 * 60 * 24 * 7;
 
@@ -21,6 +22,10 @@ export async function signUp(params: SignUpParams) {
         await db.collection('users').doc(uid).set({
             name, email
         })
+        return{
+            success: true,
+            message: 'Account created successfully. Please sign in.',
+        }
     } catch (e: any) {
         console.error('Error creating a user', e);
 
@@ -76,4 +81,37 @@ export async function setSessionCookie(idToken: string) {
         path: '/',
         sameSite: 'lax'
     })
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  const cookieStore = await cookies();
+
+  const sessionCookie = cookieStore.get("session")?.value;
+  if (!sessionCookie) return null;
+
+  try {
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+
+    // get user info from db
+    const userRecord = await db
+      .collection("users")
+      .doc(decodedClaims.uid)
+      .get();
+    if (!userRecord.exists) return null;
+
+    return {
+      ...userRecord.data(),
+      id: userRecord.id,
+    } as User;
+  } catch (error) {
+    console.log(error);
+
+    // Invalid or expired session
+    return null;
+  }
+}
+
+export async function isAuthenticated() {
+  const user = await getCurrentUser();
+  return !!user;
 }
